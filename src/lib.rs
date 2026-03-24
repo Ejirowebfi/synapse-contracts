@@ -8,7 +8,7 @@ mod types;
 use access::{require_admin, require_relayer};
 use events::emit;
 use soroban_sdk::{contract, contractimpl, Address, Env, String as SorobanString, Vec};
-use storage::{assets, deposits, dlq, relayers, settlements};
+use storage::{assets, deposits, dlq, limits, relayers, settlements};
 use types::{DlqEntry, Event, Settlement, Transaction, TransactionStatus};
 
 #[contract]
@@ -197,8 +197,12 @@ impl SynapseContract {
     }
 
     // TODO(#41): add `get_admin()` query
-    // TODO(#43): add `get_min_deposit()` query
     // TODO(#44): add `get_max_deposit()` query
+
+    /// Returns the minimum deposit amount required for a bridge transfer.
+    pub fn get_min_deposit(env: Env) -> i128 {
+        limits::get_min(&env)
+    }
 
     pub fn is_paused(env: Env) -> bool {
         storage::pause::is_paused(&env)
@@ -482,6 +486,15 @@ mod tests {
         let client = SynapseContractClient::new(&env, &contract_id);
         let result = client.get_dlq_entry(&SorobanString::from_str(&env, "no-such-tx"));
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_get_min_deposit_returns_stored_value() {
+        let env = Env::default();
+        let (_, contract_id) = setup(&env);
+        env.as_contract(&contract_id, || storage::limits::set_min(&env, 500_000));
+        let client = SynapseContractClient::new(&env, &contract_id);
+        assert_eq!(client.get_min_deposit(), 500_000i128);
     }
 
     #[test]
